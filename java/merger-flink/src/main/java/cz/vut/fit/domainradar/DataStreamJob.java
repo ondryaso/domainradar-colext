@@ -119,9 +119,13 @@ public class DataStreamJob {
                 .filter(dnAggregate -> !dnAggregate.getDNSIPs().isEmpty())
                 .uid("dn-data-with-ips-filter")
                 .keyBy(KafkaDomainAggregate::getDomainName);
-        var mergedData = ipDataStream.connect(dnDataWithIps)
+        var mergedResults = ipDataStream.connect(dnDataWithIps)
                 .process(new IPEntriesProcessFunction())
-                .uid("dn-ip-final-merging-processor")
+                .uid("dn-ip-final-merging-processor");
+        mergedResults
+                .addSink(new cz.vut.fit.domainradar.db.PostgresCollectorResultSink())
+                .uid("postgres-sink-with-ips");
+        var mergedData = mergedResults
                 .map(new SerdeMappingFunction())
                 .uid("serde-mapper-with-ips")
                 .filter(tuple -> tuple.f0 != null)
@@ -135,9 +139,13 @@ public class DataStreamJob {
                 .filter(dnAggregate -> dnAggregate.getDNSIPs().isEmpty())
                 .uid("dn-data-without-ips-filter")
                 .keyBy(KafkaDomainAggregate::getDomainName);
-        var resultsWithoutIps = dnDataWithoutIps
+        var resultsWithoutIpsKM = dnDataWithoutIps
                 .map(dnAggregate -> new KafkaMergedResult(dnAggregate.getDomainName(), dnAggregate, null))
-                .uid("map-to-merged-results")
+                .uid("map-to-merged-results");
+        resultsWithoutIpsKM
+                .addSink(new cz.vut.fit.domainradar.db.PostgresCollectorResultSink())
+                .uid("postgres-sink-without-ips");
+        var resultsWithoutIps = resultsWithoutIpsKM
                 .map(new SerdeMappingFunction())
                 .uid("serde-mapper-without-ips")
                 .filter(tuple -> tuple.f0 != null)
