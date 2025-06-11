@@ -122,8 +122,12 @@ public class DataStreamJob {
         var mergedResults = ipDataStream.connect(dnDataWithIps)
                 .process(new IPEntriesProcessFunction())
                 .uid("dn-ip-final-merging-processor");
+        var pgSink = new cz.vut.fit.domainradar.db.PostgresCollectorResultSink(
+                appProperties.getProperty("db.url"),
+                appProperties.getProperty("db.user"),
+                appProperties.getProperty("db.password"));
         mergedResults
-                .addSink(new cz.vut.fit.domainradar.db.PostgresCollectorResultSink())
+                .sinkTo(pgSink)
                 .uid("postgres-sink-with-ips");
         var mergedData = mergedResults
                 .map(new SerdeMappingFunction())
@@ -143,7 +147,7 @@ public class DataStreamJob {
                 .map(dnAggregate -> new KafkaMergedResult(dnAggregate.getDomainName(), dnAggregate, null))
                 .uid("map-to-merged-results");
         resultsWithoutIpsKM
-                .addSink(new cz.vut.fit.domainradar.db.PostgresCollectorResultSink())
+                .sinkTo(pgSink)
                 .uid("postgres-sink-without-ips");
         var resultsWithoutIps = resultsWithoutIpsKM
                 .map(new SerdeMappingFunction())
